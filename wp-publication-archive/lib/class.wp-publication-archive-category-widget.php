@@ -107,7 +107,7 @@ class WP_Publication_Archive_Category_Widget extends WP_Widget {
 		$queried = get_queried_object();
 		if ( null !== $queried ) {
 			// Use the current post's categories
-			$cats = $queried->ID;
+			$cats = $queried->cat_ID;
 
 			$query_args['category__in'] = $cats;
 		}
