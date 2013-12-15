@@ -937,6 +937,29 @@ if ( !class_exists('WordpressPopularPosts') ) {
 						WHERE x.taxonomy = 'category' AND t.term_id IN($out_cats)
 						) ";
 				}
+			} else { // we did not indicate categories, so defaulting to order within a category
+				$category = get_queried_object();
+				$cat_ids = array();
+				array_push($cat_ids, $category->cat_ID);
+				$in = array();
+
+				usort($cat_ids, array(&$this, 'sorter'));
+
+				for ($i=0; $i < count($cat_ids); $i++) {
+					if ($cat_ids[$i] >= 0) $in[] = $cat_ids[$i];
+				}
+
+				$in_cats = implode(",", $in);
+
+				if ($in_cats != "") { // get posts from from given cats only
+					$cats = " AND p.ID IN (
+						SELECT object_id
+						FROM $wpdb->term_relationships AS r
+							 JOIN $wpdb->term_taxonomy AS x ON x.term_taxonomy_id = r.term_taxonomy_id
+							 JOIN $wpdb->terms AS t ON t.term_id = x.term_id
+						WHERE x.taxonomy = 'category' AND t.term_id IN($in_cats)
+						) ";
+				}
 			}
 
 			// * authors
