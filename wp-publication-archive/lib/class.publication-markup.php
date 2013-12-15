@@ -172,9 +172,9 @@ class WP_Publication_Archive_Item {
 	 * @return string
 	 */
 	public function get_the_title( $before = '<div class="publication_title">', $after = '</div>' ) {
-		$title = '<a href="' . get_permalink( $this->ID ) . '">';
-		$title .= apply_filters( 'wpa-title', $this->title, $this->ID );
-		$title .= '</a>';
+        $title = '<a href="' .  WP_Publication_Archive::get_download_link( $this->ID ) . '">';
+        $title .= $this->filename;
+        $title .= '</a>';
 
 		return $before . $title . $after;
 	}
