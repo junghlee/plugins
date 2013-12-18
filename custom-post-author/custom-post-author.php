@@ -31,14 +31,11 @@ function cpa_init() {
 }
 
 // change the authors name
-function cpa_the_author( $display_name ) {
+function cpa_the_author() {
 
 	// Return on admin pages
 	if ( is_admin() )
 		return;
-
-	// Set default
-	$return_name = $display_name;
 
 	// Get current post
 	global $post;
@@ -54,7 +51,7 @@ function cpa_the_author( $display_name ) {
 		$return_name = 'Email <a href="mailto:' . $author_email . '?Subject=Gracepoint Resources: ' . get_the_title($post->ID) . '">'. $return_name . '</a>';
 
 	// register filter for other plugins
-	$return_name = apply_filters( 'cpa_the_author', $return_name, $author_name, $author_email );
+	//$return_name = apply_filters( 'cpa_the_author', $return_name, $author_name, $author_email );
 
 	return $return_name;
 }
