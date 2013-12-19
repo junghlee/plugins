@@ -11,17 +11,7 @@
     background: -ms-linear-gradient(top, #efefef 0%,#ddd 100%);
     filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#eeeeee', endColorstr='#dddddd',GradientType=0 );
     background: linear-gradient(top, #efefef 0%,#ddd 100%);
-	
-    border-radius: 4px;
-    -moz-border-radius: 4px;
-    -o-border-radius: 4px;
-    -webkit-border-radius: 4px;
-	
-    box-shadow: inset #eee 1px 1px 0, inset #eee -1px -1px 0;
-    -moz-box-shadow: inset #eee 1px 1px 0, inset #eee -1px -1px 0;
-    -o-box-shadow: inset #eee 1px 1px 0, inset #eee -1px -1px 0;
-	
-    border: 1px solid #ccc;
+
     padding: 4px;
     position: relative;
 	
@@ -47,7 +37,7 @@ ul.dropdown li a {
 }
 
 /** Link colors */
-ul.dropdown a, ul.dropdown a:link, ul.dropdown a:visited { background: transparent; border: 0; color: #888; text-shadow:#fff 1px 1px 1px; text-decoration: none; display:block; margin:1px; font-weight: normal; }
+ul.dropdown a, ul.dropdown a:link, ul.dropdown a:visited { background: transparent; border: 0; color: #888; text-decoration: none; display:block; margin:1px; font-weight: normal; }
 ul.dropdown a:hover	{ color: #444; }
 ul.dropdown a:active	{ color: #27d; }
 
