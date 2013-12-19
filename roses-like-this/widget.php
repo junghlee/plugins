@@ -17,14 +17,21 @@ class MostLikedPosts extends WP_Widget {
     if ($title)
       echo $before_title . $title . $after_title;
 
+    $queried = get_queried_object();
+    $cats = wp_get_post_categories( $queried->ID );
+    $cat_list = implode(',',$cats);
+
     global $wpdb;
     $querystr = "
     SELECT $wpdb->posts.*
-    FROM $wpdb->posts, $wpdb->postmeta
+    FROM $wpdb->posts, $wpdb->postmeta, $wpdb->term_relationships
     WHERE $wpdb->posts.ID = $wpdb->postmeta.post_id
+    AND $wpdb->posts.ID = $wpdb->term_relationships.object_id
     AND $wpdb->postmeta.meta_key = '_likes'
     AND $wpdb->posts.post_status = 'publish'
+    AND $wpdb->posts.post_password = ''
     AND $wpdb->posts.post_type = 'post'
+    AND $wpdb->term_relationships.term_taxonomy_id IN ($cat_list)
     ORDER BY $wpdb->postmeta.meta_value DESC
     LIMIT " . $numberOfPostsToShow;
 
