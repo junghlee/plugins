@@ -88,12 +88,22 @@ class WP_Publication_Archive_Category_Widget extends WP_Widget {
 	 * @param array $instance
 	 */
 	public function widget( $args, $instance ) {
+		$queried  = get_queried_object();
+        $cats = array();
+        if (is_category()) {
+            $category = $queried;
+            array_push($cats, $category->cat_ID);
+        } else {
+            $cats = wp_get_post_categories( $queried->ID );
+            $category = get_category($cats[0]);
+        }
+
 		$title    = apply_filters( 'widget_title', empty( $instance['title'] ) ? __( 'Related Publications', 'wp_pubarch_translate' ) : $instance['title'], $instance, $this->id_base );
 		$count    = (int) $instance['count'];
 
 		echo $args['before_widget'];
 		if ( $title ) {
-			echo $args['before_title'] . $title . $args['after_title'];
+			echo $args['before_title'] . $category->name . " " . $title . $args['after_title'];
 		}
 
 		$query_args = array(
@@ -103,14 +113,12 @@ class WP_Publication_Archive_Category_Widget extends WP_Widget {
 			'order' => 'DESC'
 		);
 
+
 		// Grab the current cagtegory
-		$queried = get_queried_object();
 		if ( null !== $queried ) {
 			// Use the current post's categories
-			$cats = $queried->cat_ID;
-
 			$query_args['category__in'] = $cats;
-		}
+		} 
 
 		echo '<ul>';
 
