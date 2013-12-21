@@ -254,6 +254,14 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			extract($args);
 			//echo $widget_id;
 
+            $queried  = get_queried_object();
+            if (is_category()) {
+                $category = $queried;
+            } else {
+                $cats = wp_get_post_categories( $queried->ID );
+                $category = get_category($cats[0]);
+            }
+
 			echo "<!-- Wordpress Popular Posts Plugin v". $this->version ." [W] [".$instance['range']."] [".$instance['order_by']."]". (($instance['markup']['custom_html']) ? ' [custom]' : ' [regular]') ." -->"."\n";
 
 			echo $before_widget . "\n";
@@ -261,7 +269,8 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			// has user set a title?
 			if ($instance['title'] != '') {
 
-				$title = apply_filters( 'widget_title', $instance['title'] );
+                $my_title = "Popular in $category->name";
+				$title = apply_filters( 'widget_title', $my_title);
 
 				if ($instance['markup']['custom_html'] && $instance['markup']['title-start'] != "" && $instance['markup']['title-end'] != "" ) {
 					echo htmlspecialchars_decode($instance['markup']['title-start'], ENT_QUOTES) . $title . htmlspecialchars_decode($instance['markup']['title-end'], ENT_QUOTES);
