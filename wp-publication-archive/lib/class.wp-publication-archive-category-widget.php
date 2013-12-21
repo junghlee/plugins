@@ -127,7 +127,8 @@ class WP_Publication_Archive_Category_Widget extends WP_Widget {
 		add_filter( 'excerpt_length', array( $this, 'limit_summary_length' ) );
 		foreach( $publications as $post ) {
             $post_status = get_post_status($post->ID);
-            if ((is_user_logged_in() || $post_status == 'published') && post_password_required($post)) {
+            //if ((is_user_logged_in() || $post_status == 'published') && post_password_required($post)) {
+            if (is_user_logged_in() || $post_status == 'published') {
                 $publication = new WP_Publication_Archive_Item( $post );
 
                 echo '<li>';
