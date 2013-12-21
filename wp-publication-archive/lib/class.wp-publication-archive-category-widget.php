@@ -126,13 +126,16 @@ class WP_Publication_Archive_Category_Widget extends WP_Widget {
 
 		add_filter( 'excerpt_length', array( $this, 'limit_summary_length' ) );
 		foreach( $publications as $post ) {
-			$publication = new WP_Publication_Archive_Item( $post );
+            $post_status = get_post_status($post->ID);
+            if ((is_user_logged_in() || $post_status == 'published') && post_password_required($post)) {
+                $publication = new WP_Publication_Archive_Item( $post );
 
-			echo '<li>';
-			$publication->the_title();
-			echo '<p>' . $publication->summary . '</p>';
+                echo '<li>';
+                $publication->the_title();
+                echo '<p>' . $publication->summary . '</p>';
 
-			echo '</li>';
+                echo '</li>';
+            }
 		}
 		remove_filter( 'excerpt_length', array( $this, 'limit_summary_length' ) );
 
