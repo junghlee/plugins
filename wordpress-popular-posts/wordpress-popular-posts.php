@@ -947,18 +947,18 @@ if ( !class_exists('WordpressPopularPosts') ) {
 						) ";
 				}
 			} else { // we did not indicate categories, so defaulting to order within a category
-				$category = get_queried_object();
-				$cat_ids = array();
-				array_push($cat_ids, $category->cat_ID);
-				$in = array();
+                $queried  = get_queried_object();
+                $categories = array();
+                if (is_category()) {
+                    $category = $queried;
+                    array_push($categories, $category->cat_ID);
+                } else {
+                    $categories = wp_get_post_categories( $queried->ID );
+                    $category = get_category($categories[0]);
+                }
 
-				usort($cat_ids, array(&$this, 'sorter'));
 
-				for ($i=0; $i < count($cat_ids); $i++) {
-					if ($cat_ids[$i] >= 0) $in[] = $cat_ids[$i];
-				}
-
-				$in_cats = implode(",", $in);
+				$in_cats = implode(",", $categories);
 
 				if ($in_cats != "") { // get posts from from given cats only
 					$cats = " AND p.ID IN (
