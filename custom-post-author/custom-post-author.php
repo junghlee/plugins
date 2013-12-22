@@ -48,7 +48,7 @@ function cpa_the_author() {
 	// Check URL
 	$author_email = get_post_meta( $post->ID, 'cpa_author_url', TRUE );
 	if ( '' != $author_email )
-		$return_name = 'Email <a href="mailto:' . $author_email . '?Subject=Gracepoint Resources: ' . get_the_title($post->ID) . '">'. $return_name . '</a>';
+		$return_name = 'Authored by <a href="mailto:' . $author_email . '?Subject=Gracepoint Resources: ' . get_the_title($post->ID) . '">'. $return_name . '</a>';
 
 	// register filter for other plugins
 	//$return_name = apply_filters( 'cpa_the_author', $return_name, $author_name, $author_email );
