@@ -260,7 +260,7 @@ class Updraft_Restorer extends WP_Upgrader {
 					# Make sure permissions are at least as great as those of the parent
 					if ($is_dir && !empty($chmod)) $this->chmod_if_needed($dest_dir.$file, $chmod, false, $wpfs);
 				} else {
-					return new WP_Error('move_failed', $this->strings['move_failed']);
+					return new WP_Error('move_failed', $this->strings['move_failed'], $working_dir."/".$file." -> ".$dest_dir.$file);
 				}
 			} elseif (3 == $preserve_existing && !empty($filestruc['files'])) {
 				# The directory ($dest_dir) already exists, and we've been requested to copy-in. We need to perform the recursive copy-in
@@ -278,7 +278,7 @@ class Updraft_Restorer extends WP_Upgrader {
 				if (!empty($chmod)) $this->chmod_if_needed($dest_dir.$file, $chmod, false, $wpfs);
 
 				if (is_wp_error($copy_in)) return $copy_in;
-				if (!$copy_in) return new WP_Error('move_failed', $this->strings['move_failed']);
+				if (!$copy_in) return new WP_Error('move_failed', $this->strings['move_failed'], "(2) ".$working_dir.'/'.$file." -> ".$dest_dir.$file);
 
 				$wpfs->rmdir($working_dir.'/'.$file);
 			} else {
@@ -351,7 +351,7 @@ class Updraft_Restorer extends WP_Upgrader {
 		# Check upgrade directory is writable (instead of having non-obvious messages when we try to write)
 		# In theory, this is redundant (since we already checked for access to WP_CONTENT_DIR); but in practice, this extra check has been needed
 
-		global $wp_filesystem, $updraftplus, $updraftplus_addons_migrator;
+		global $wp_filesystem, $updraftplus, $updraftplus_admin, $updraftplus_addons_migrator;
 
 		if (empty($this->pre_restore_updatedir_writable)) {
 			$upgrade_folder = $wp_filesystem->wp_content_dir() . 'upgrade/';
@@ -385,7 +385,8 @@ class Updraft_Restorer extends WP_Upgrader {
 		if (('plugins' == $type || 'uploads' == $type || 'themes' == $type) && (!is_multisite() || $this->ud_backup_is_multisite !== 0 || ('uploads' != $type || empty($updraftplus_addons_migrator->new_blogid )))) {
 // 			if ($wp_filesystem->exists($wp_filesystem_dir.'-old')) {
 			if (file_exists($updraft_dir.'/'.basename($wp_filesystem_dir)."-old")) {
-				$ret_val = new WP_Error('already_exists', sprintf(__('An existing unremoved backup from a previous restore exists (please use the "Delete Old Directories" button to delete it before trying again): %s', 'updraftplus'), $wp_filesystem_dir.'-old'));
+				$ret_val = new WP_Error('already_exists', sprintf(__('Existing unremoved folders from a previous restore exist (please use the "Delete Old Directories" button to delete them before trying again): %s', 'updraftplus'), $wp_filesystem_dir.'-old'));
+
 			} else {
 				// No longer used - since we now do not move the directories themselves
 // 				# File permissions test; see if we can move the directory back and forth
@@ -1153,13 +1154,8 @@ class Updraft_Restorer extends WP_Upgrader {
 
 	}
 
-	function sql_exec($sql_line, $sql_type) {
-
-		// if (strlen($sql_line) > 100000) {
-		// echo "Length: ".strlen($sql_line)." Mem: ".round(memory_get_usage(true)/1048576, 1)." / ".round(memory_get_usage()/1048576, 1)."<br>";
-		// }
-
-// 		echo "Memory usage (Mb): ".round(memory_get_usage(false)/1048576, 1)." : ".round(memory_get_usage(true)/1048576, 1)."<br>";
+	# UPDATE is sql_type=5 (not used in the function, but used in Migrator and so noted for reference)
+	public function sql_exec($sql_line, $sql_type) {
 
 		global $wpdb, $updraftplus;
 		$ignore_errors = false;
@@ -1172,8 +1168,6 @@ class Updraft_Restorer extends WP_Upgrader {
 				$updraftplus->log_e('Cannot drop tables, so deleting instead (%s)', $sql_line);
 				$ignore_errors = true;
 			}
-// 				echo substr($sql_line, 0, 50)." (".strlen($sql_line).")<br>";
-
 			if ($this->use_wpdb) {
 				$req = $wpdb->query($sql_line);
 				if (!$req) $this->last_error = $wpdb->last_error;
@@ -1188,7 +1182,7 @@ class Updraft_Restorer extends WP_Upgrader {
 			if (!$ignore_errors) $this->errors++;
 			$print_err = (strlen($sql_line) > 100) ? substr($sql_line, 0, 100).' ...' : $sql_line;
 			echo sprintf(_x('An error (%s) occurred:', 'The user is being told the number of times an error has happened, e.g. An error (27) occurred', 'updraftplus'), $this->errors)." - ".htmlspecialchars($this->last_error)." - ".__('the database query being run was:','updraftplus').' '.htmlspecialchars($print_err).'<br>';
-			$updraftplus->log("An error (".$this->errors.") occurred: ".$this->last_error." - SQL query was: ".$sql_line);
+			$updraftplus->log("An error (".$this->errors.") occurred: ".$this->last_error." - SQL query was: ".substr($sql_line, 0, 65536));
 			// First command is expected to be DROP TABLE
 			if (1 == $this->errors && 2 == $sql_type && 0 == $this->tables_created) {
 				return new WP_Error('initial_db_error', __('An error occurred on the first CREATE TABLE command - aborting run','updraftplus'));
@@ -1202,9 +1196,10 @@ class Updraft_Restorer extends WP_Upgrader {
 		if (($this->line)%50 == 0) {
 			if (($this->line)%250 == 0 || $this->line<250) {
 				$time_taken = microtime(true) - $this->start_time;
-				$updraftplus->log_e('Database lines processed: %d in %.2f seconds',$this->line, $time_taken);
+				$updraftplus->log_e('Database queries processed: %d in %.2f seconds',$this->line, $time_taken);
 			}
 		}
+		return $req;
 	}
 
 // 	function option_filter($which) {
