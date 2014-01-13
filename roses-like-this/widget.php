@@ -29,14 +29,15 @@ class MostLikedPosts extends WP_Widget {
     global $wpdb;
     $querystr = "
     SELECT $wpdb->posts.*
-    FROM $wpdb->posts, $wpdb->postmeta, $wpdb->term_relationships
+    FROM $wpdb->posts, $wpdb->postmeta, $wpdb->term_relationships, $wpdb->term_taxonomy
     WHERE $wpdb->posts.ID = $wpdb->postmeta.post_id
     AND $wpdb->posts.ID = $wpdb->term_relationships.object_id
+    AND $wpdb->term_taxonomy.term_taxonomy_id = $wpdb->term_relationships.term_taxonomy_id
     AND $wpdb->postmeta.meta_key = '_likes'
     AND $wpdb->posts.post_status = 'publish'
     AND $wpdb->posts.post_password = ''
     AND $wpdb->posts.post_type = 'post'
-    AND $wpdb->term_relationships.term_taxonomy_id IN ($cat_list)
+    AND $wpdb->term_taxonomy.term_id IN ($cat_list)
     ORDER BY $wpdb->postmeta.meta_value DESC
     LIMIT " . $numberOfPostsToShow;
 
