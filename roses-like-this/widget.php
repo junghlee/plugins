@@ -18,7 +18,12 @@ class MostLikedPosts extends WP_Widget {
       echo $before_title . $title . $after_title;
 
     $queried = get_queried_object();
-    $cats = wp_get_post_categories( $queried->ID );
+    $cats = array();
+    if (is_single()) {
+        $cats = wp_get_post_categories( $queried->ID );
+    } else if (is_category()) {
+        array_push($cats, $queried->cat_ID);
+    }
     $cat_list = implode(',',$cats);
 
     global $wpdb;
@@ -51,7 +56,7 @@ class MostLikedPosts extends WP_Widget {
         the_title();
 ?></a> (<?php
         print get_post_meta(get_the_id(), "_likes", 1);
-        echo __('likes', 'like_this');
+        echo __(' likes', 'like_this');
 ?> )</li>
      <?php
       endforeach;
