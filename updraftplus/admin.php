@@ -558,6 +558,8 @@ class UpdraftPlus_Admin {
 			));
 		} elseif (isset($_REQUEST['subaction']) && 'dismissautobackup' == $_REQUEST['subaction']) {
 			UpdraftPlus_Options::update_updraft_option('updraftplus_dismissedautobackup', time() + 84*86400);
+		} elseif (isset($_REQUEST['subaction']) && 'dismissexpiry' == $_REQUEST['subaction']) {
+			UpdraftPlus_Options::update_updraft_option('updraftplus_dismissedexpiry', time() + 14*86400);
 		} elseif (isset($_GET['subaction']) && 'restore_alldownloaded' == $_GET['subaction'] && isset($_GET['restoreopts']) && isset($_GET['timestamp'])) {
 
 			$backups = $updraftplus->get_backup_history();
@@ -618,7 +620,9 @@ class UpdraftPlus_Admin {
 						} else {
 							$itext = (0 == $index) ? '' : $index;
 							if (!empty($backups[$timestamp][$type.$itext.'-size']) && $backups[$timestamp][$type.$itext.'-size'] != filesize($updraft_dir.'/'.$file)) {
-								$warn[] = sprintf(__('File (%s) was found, but has a different size (%s) from what was expected (%s) - it may be corrupt.', 'updraftplus'), $file, filesize($updraft_dir.'/'.$file), $backups[$timestamp][$type.$itext.'-size']);
+								if (empty($warn['doublecompressfixed'])) {
+									$warn[] = sprintf(__('File (%s) was found, but has a different size (%s) from what was expected (%s) - it may be corrupt.', 'updraftplus'), $file, filesize($updraft_dir.'/'.$file), $backups[$timestamp][$type.$itext.'-size']);
+								}
 							}
 							do_action_ref_array("updraftplus_checkzip_$type", array($updraft_dir.'/'.$file, &$mess, &$warn, &$err));
 						}
@@ -755,11 +759,12 @@ class UpdraftPlus_Admin {
 
 
 		} elseif ('rawbackuphistory' == $_REQUEST['subaction']) {
-			echo '<h3>'.__('Known backups (raw)', 'updraftplus').'</h3><pre>';
+
+			echo '<h3 id="ud-debuginfo-rawbackups">'.__('Known backups (raw)', 'updraftplus').'</h3><pre>';
 			var_dump($updraftplus->get_backup_history());
 			echo '</pre>';
 
-			echo '<h3>Files</h3><pre>';
+			echo '<h3 id="ud-debuginfo-files">Files</h3><pre>';
 			$updraft_dir = $updraftplus->backups_dir_location();
 			$raw_output = array();
 			$d = dir($updraft_dir);
@@ -783,7 +788,7 @@ class UpdraftPlus_Admin {
 			foreach ($raw_output as $line) echo $line;
 			echo '</pre>';
 
-			echo '<h3>'.__('Options (raw)', 'updraftplus').'</h3>';
+			echo '<h3 id="ud-debuginfo-options">'.__('Options (raw)', 'updraftplus').'</h3>';
 			$opts = $this->get_settings_keys();
 			asort($opts);
 			// <tr><th>'.__('Key','updraftplus').'</th><th>'.__('Value','updraftplus').'</th></tr>
@@ -804,6 +809,17 @@ class UpdraftPlus_Admin {
 			$this->delete_old_dirs_go(false);
 		} elseif ('phpinfo' == $_REQUEST['subaction']) {
 			phpinfo(INFO_ALL ^ (INFO_CREDITS | INFO_LICENSE));
+
+			echo '<h3 id="ud-debuginfo-constants">'.__('Constants', 'updraftplus').'</h3>';
+			$opts = @get_defined_constants();
+			ksort($opts);
+			// <tr><th>'.__('Key','updraftplus').'</th><th>'.__('Value','updraftplus').'</th></tr>
+			echo '<table><thead></thead><tbody>';
+			foreach ($opts as $key => $opt) {
+				echo '<tr><td>'.htmlspecialchars($key).'</td><td>'.htmlspecialchars(print_r($opt, true)).'</td>';
+			}
+			echo '</tbody></table>';
+
 		} elseif ('doaction' == $_REQUEST['subaction'] && !empty($_REQUEST['subsubaction']) && 'updraft_' == substr($_REQUEST['subsubaction'], 0, 8)) {
 			do_action($_REQUEST['subsubaction']);
 		} elseif ('backupnow' == $_REQUEST['subaction']) {
@@ -993,8 +1009,8 @@ class UpdraftPlus_Admin {
 			return array($mess, $warn, $err);
 		}
 
-		$dbhandle = gzopen($db_file, 'r');
-		if (!$dbhandle) {
+		$dbhandle = $this->gzopen_for_read($db_file, $warn, $err);
+		if (!is_resource($dbhandle)) {
 			$err[] =  __('Failed to open database file.','updraftplus');
 			return array($mess, $warn, $err);
 		}
@@ -1131,7 +1147,65 @@ CREATE TABLE $wpdb->signups (
 
 	}
 
-	function upload_dir($uploads) {
+	private function gzopen_for_read($file, &$warn, &$err) {
+		if (false === ($dbhandle = gzopen($file, 'r'))) return false;
+		if (false === ($bytes = gzread($dbhandle, 3))) return false;
+		# Double-gzipped?
+		if ('H4sI' != base64_encode($bytes)) {
+			if (0 === gzseek($dbhandle, 0)) {
+				return $dbhandle;
+			} else {
+				@gzclose($dbhandle);
+				return gzopen($file, 'r');
+			}
+		}
+		# Yes, it's double-gzipped
+
+		$what_to_return = false;
+		$mess = __('The database file appears to have been compressed twice - probably the website you downloaded it from had a mis-configured webserver.', 'updraftplus');
+		$messkey = 'doublecompress';
+		$err_msg = '';
+
+		if (false === ($fnew = fopen($file.".tmp", 'w')) || !is_resource($fnew)) {
+
+			@gzclose($dbhandle);
+			$err_msg = __('The attempt to undo the double-compression failed.', 'updraftplus');
+
+		} else {
+
+			@fwrite($fnew, $bytes);
+			$emptimes = 0;
+			while (!gzeof($dbhandle)) {
+				$bytes = @gzread($dbhandle, 131072);
+				if (empty($bytes)) {
+					global $updraftplus;
+					$emptimes++;
+					$updraftplus->log("Got empty gzread ($emptimes times)");
+					if ($emptimes>2) break;
+				} else {
+					@fwrite($fnew, $bytes);
+				}
+			}
+
+			gzclose($dbhandle);
+			fclose($fnew);
+			# On some systems (all Windows?) you can't rename a gz file whilst it's gzopened
+			if (!rename($file.".tmp", $file)) {
+				$err_msg = __('The attempt to undo the double-compression failed.', 'updraftplus');
+			} else {
+				$mess .= ' '.__('The attempt to undo the double-compression succeeded.', 'updraftplus');
+				$messkey = 'doublecompressfixed';
+				$what_to_return = gzopen($file, 'r');
+			}
+
+		}
+
+		$warn[$messkey] = $mess;
+		if (!empty($err_msg)) $err[] = $err_msg;
+		return $what_to_return;
+	}
+
+	public function upload_dir($uploads) {
 		global $updraftplus;
 		$updraft_dir = $updraftplus->backups_dir_location();
 		if (is_writable($updraft_dir)) $uploads['path'] = $updraft_dir;
@@ -1139,16 +1213,16 @@ CREATE TABLE $wpdb->signups (
 	}
 
 	// We do actually want to over-write
-	function unique_filename_callback($dir, $name, $ext) {
+	public function unique_filename_callback($dir, $name, $ext) {
 		return $name.$ext;
 	}
 
-	function sanitize_file_name($filename) {
+	public function sanitize_file_name($filename) {
 		// WordPress 3.4.2 on multisite (at least) adds in an unwanted underscore
 		return preg_replace('/-db\.gz_\.crypt$/', '-db.gz.crypt', $filename);
 	}
 
-	function plupload_action() {
+	public function plupload_action() {
 		// check ajax nonce
 
 		global $updraftplus;
@@ -1233,7 +1307,7 @@ CREATE TABLE $wpdb->signups (
 		exit;
 	}
 
-	function plupload_action2() {
+	public function plupload_action2() {
 
 		@set_time_limit(900);
 		global $updraftplus;
@@ -1315,7 +1389,7 @@ CREATE TABLE $wpdb->signups (
 	}
 
 
-	function settings_output() {
+	public function settings_output() {
 
 		global $updraftplus;
 
@@ -1709,7 +1783,7 @@ CREATE TABLE $wpdb->signups (
 	<p>
 		<input type="checkbox" id="backupnow_nodb"> <label for="backupnow_nodb"><?php _e("Don't include the database in the backup", 'updraftplus'); ?></label><br>
 		<input type="checkbox" id="backupnow_nofiles"> <label for="backupnow_nofiles"><?php _e("Don't include any files in the backup", 'updraftplus'); ?></label><br>
-		<input type="checkbox" id="backupnow_nocloud"> <label for="backupnow_nocloud"><?php _e("Don't send this backup to cloud storage", 'updraftplus'); ?></label>
+		<input type="checkbox" id="backupnow_nocloud"> <label for="backupnow_nocloud"><?php _e("Don't send this backup to remote storage", 'updraftplus'); ?></label>
 	</p>
 
 	<p><?php _e('Does nothing happen when you attempt backups?','updraftplus');?> <a href="http://updraftplus.com/faqs/my-scheduled-backups-and-pressing-backup-now-does-nothing-however-pressing-debug-backup-does-produce-a-backup/"><?php _e('Go here for help.', 'updraftplus');?></a></p>
@@ -1752,7 +1826,8 @@ CREATE TABLE $wpdb->signups (
 				if (version_compare(phpversion(), '5.2.0', '>=') && extension_loaded('zip')) {
 					$ziparchive_exists = __('Yes', 'updraftplus');
 				} else {
-					$ziparchive_exists = (method_exists('ZipArchive', 'addFile')) ? __('Yes', 'updraftplus') : __('No', 'updraftplus');
+					# First do class_exists, because method_exists still sometimes segfaults due to a rare PHP bug
+					$ziparchive_exists = (class_exists('ZipArchive') && method_exists('ZipArchive', 'addFile')) ? __('Yes', 'updraftplus') : __('No', 'updraftplus');
 				}
 
 				echo __('PHP has support for ZipArchive::addFile:', 'updraftplus').' '.$ziparchive_exists.'<br>';
@@ -2282,7 +2357,8 @@ CREATE TABLE $wpdb->signups (
 					}
 				}
 			?>
-				<p><?php echo apply_filters('updraftplus_admin_directories_description', __('The above directories are everything, except for WordPress core itself which you can download afresh from WordPress.org.', 'updraftplus').' <a href="http://updraftplus.com/shop/">'.htmlspecialchars(__('See also the "More Files" add-on from our shop.', 'updraftplus'))); ?></a> <a href="http://wordshell.net"></p><p>(<?php echo __('Use WordShell for automatic backup, version control and patching', 'updraftplus');?></a>).</p></td>
+				<p><?php echo apply_filters('updraftplus_admin_directories_description', __('The above directories are everything, except for WordPress core itself which you can download afresh from WordPress.org.', 'updraftplus').' <a href="http://updraftplus.com/shop/">'.htmlspecialchars(__('See also the "More Files" add-on from our shop.', 'updraftplus'))); ?></a></p>
+				<?php if (!defined('UPDRAFTPLUS_NOADS_A')) echo '<p><a href="http://wordshell.net">('.__('Use WordShell for automatic backup, version control and patching', 'updraftplus').').</a></p>';?>
 				</td>
 			</tr>
 
@@ -3123,8 +3199,8 @@ ENDHERE;
 	}
 
 	function get_settings_keys() {
-		return array('updraft_autobackup_default', 'updraftplus_tmp_googledrive_access_token', 'updraftplus_dismissedautobackup', 'updraft_interval', 'updraft_interval_database', 'updraft_retain', 'updraft_retain_db', 'updraft_encryptionphrase', 'updraft_service', 'updraft_dropbox_appkey', 'updraft_dropbox_secret', 'updraft_googledrive_clientid', 'updraft_googledrive_secret', 'updraft_googledrive_remotepath', 'updraft_ftp_login', 'updraft_ftp_pass', 'updraft_ftp_remote_path', 'updraft_server_address', 'updraft_dir', 'updraft_email', 'updraft_delete_local', 'updraft_debug_mode', 'updraft_include_plugins', 'updraft_include_themes', 'updraft_include_uploads', 'updraft_include_others', 'updraft_include_wpcore', 'updraft_include_wpcore_exclude', 'updraft_include_more', 'updraft_include_blogs', 'updraft_include_mu-plugins', 'updraft_include_others_exclude', 'updraft_include_uploads_exclude', 'updraft_lastmessage', 'updraft_googledrive_token', 'updraft_dropboxtk_request_token', 'updraft_dropboxtk_access_token', 'updraft_
-dropbox_folder',
+		return array('updraft_autobackup_default', 'updraftplus_tmp_googledrive_access_token', 'updraftplus_dismissedautobackup', 'updraftplus_dismissedexpiry', 'updraft_interval', 'updraft_interval_database', 'updraft_retain', 'updraft_retain_db', 'updraft_encryptionphrase', 'updraft_service', 'updraft_dropbox_appkey', 'updraft_dropbox_secret', 'updraft_googledrive_clientid', 'updraft_googledrive_secret', 'updraft_googledrive_remotepath', 'updraft_ftp_login', 'updraft_ftp_pass', 'updraft_ftp_remote_path', 'updraft_server_address', 'updraft_dir', 'updraft_email', 'updraft_delete_local', 'updraft_debug_mode', 'updraft_include_plugins', 'updraft_include_themes', 'updraft_include_uploads', 'updraft_include_others', 'updraft_include_wpcore', 'updraft_include_wpcore_exclude', 'updraft_include_more', 'updraft_include_blogs', 'updraft_include_mu-plugins', 'updraft_include_others_exclude', 'updraft_include_uploads_exclude', 'updraft_lastmessage', 'updraft_googledrive_token',
+		'updraft_dropboxtk_request_token', 'updraft_dropboxtk_access_token', 'updraft_dropbox_folder',
 		'updraft_last_backup', 'updraft_starttime_files', 'updraft_starttime_db', 'updraft_startday_db', 'updraft_startday_files', 'updraft_sftp_settings', 'updraft_s3generic_login', 'updraft_s3generic_pass', 'updraft_s3generic_remote_path', 'updraft_s3generic_endpoint', 'updraft_webdav_settings', 'updraft_disable_ping', 'updraft_cloudfiles', 'updraft_cloudfiles_user', 'updraft_cloudfiles_apikey', 'updraft_cloudfiles_path', 'updraft_cloudfiles_authurl', 'updraft_ssl_useservercerts', 'updraft_ssl_disableverify', 'updraft_s3_login', 'updraft_s3_pass', 'updraft_s3_remote_path', 'updraft_dreamobjects_login', 'updraft_dreamobjects_pass', 'updraft_dreamobjects_remote_path', 'updraft_report_warningsonly', 'updraft_report_wholebackup');
 	}
 

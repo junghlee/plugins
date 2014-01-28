@@ -2,8 +2,8 @@
 Contributors: Backup with UpdraftPlus, DavidAnderson
 Tags: backup, backups, restore, database, rackspace, amazon, s3, amazon s3, s3 compatible, dropbox, google drive, rackspace cloud files, rackspace, cloud files, dreamhost, dreamobjects, ftp, ftp backup, webdav, google cloud storage, cloudian, cloudn, connectria, constant cloud, eucalyptus, nifty, nimbula, back up, multisite, restoration, sftp, ftps, scp, migrate, duplicate, copy, updraft, schedule, mysql backup, database backup, db backup, website backup, wordpress backup, full backup
 Requires at least: 3.2
-Tested up to: 3.8
-Stable tag: 1.8.5
+Tested up to: 3.8.1
+Stable tag: 1.8.8
 Author URI: http://updraftplus.com
 Donate link: http://david.dw-perspective.org.uk/donate
 License: GPLv3 or later
@@ -18,7 +18,7 @@ Easy and complete backups + restoration. Manual or automated backups (backup to 
 
 <strong>Tens of thousands of users:</strong> widely tested and reliable (over 510,000 downloads). Ranks in the top 100 most used of all WordPress plugins on rankwp.com. Millions of backups completed!
 
-* Supports WordPress backups to Amazon S3 (or compatible), Dropbox, Rackspace Cloud Files, Google Drive, Google Cloud Storage, DreamHost DreamObjects, FTP and email. Also (via an add-on) FTP over SSL, SFTP, SCP and WebDAV. (Note: Microsoft forbid SkyDrive to be used by backup software). Some examples of S3-compatible providers: Cloudian, Connectria, Constant, Eucalyptus, Nifty, Nimbula, Cloudn.
+* Supports WordPress backups to Amazon S3 (or compatible), Dropbox, Rackspace Cloud Files, Google Drive, Google Cloud Storage, DreamHost DreamObjects, FTP and email. Also (via an add-on) FTP over SSL, SFTP, SCP and WebDAV. (Note: Microsoft forbid OneDrive/SkyDrive to be used by backup software). Some examples of S3-compatible providers: Cloudian, Connectria, Constant, Eucalyptus, Nifty, Nimbula, Cloudn.
 * Quick restore (both file and database backups)
 * Backup automatically on a repeating schedule
 * Site duplicator/migrator: can copy sites, and (with add-on) move them to new locations
@@ -114,9 +114,9 @@ After you have set up UpdraftPlus, you must check that your WordPress backups ar
 
 UpdraftPlus supports resuming backup runs right from the beginning, so that it does not need to do everything in a single go; but this has limits. If your website is huge and your web hosting company gives your tiny resources on an over-loaded server, then go into the "Expert settings" and reduce the size at which zip files are split (versions 1.6.53 onwards). UpdraftPlus is known to successfully back up websites that run into the multiple-gigabytes on web servers that are not resource-starved.
 
-= Will you support Windows Live SkyDrive? =
+= Will you support Windows Live OneDrive (f.k.a. SkyDrive)? =
 
-No. Microsoft forbid the use of SkyDrive by backup utilities - see http://msdn.microsoft.com/en-us/library/live/hh826521.aspx ("Here are some examples of nonconforming apps: Apps that automatically back up files or folders to SkyDrive.").
+No. Microsoft forbid the use of OneDrive/SkyDrive by backup utilities - see http://msdn.microsoft.com/en-us/library/live/hh826521.aspx ("Here are some examples of nonconforming apps: Apps that automatically back up files or folders to SkyDrive.").
 
 = Any known bugs ? =
 
@@ -134,9 +134,26 @@ Yes; especially before you submit any support requests.
 
 Thanks for asking - yes, I have. Check out my profile page - http://profiles.wordpress.org/DavidAnderson/ .
 
+
 == Changelog ==
 
 The <a href="http://updraftplus.com/news/">UpdraftPlus backup blog</a> is the best place to learn in more detail about any important changes.
+
+= 1.8.8 - 2014/01/27 =
+
+* FIX: Correctly detect table prefix on some WPMU installs that had been upgraded from an earlier version than 3.0 (i.e. very old)
+* FIX: Files directly in wp-content/uploads (from a 1.8.5 backup and not in any sub-directory) were being restored one directory too high
+* UPDATED: Updated Swedish, Portuguese and Dutch translations
+* UPDATED: Update root certificates to match latest CURL/Mozilla version
+* TWEAK: Automatically change http(s):// to webdav(s):// in WebDAV URLs if the user overlooks the instructions
+* TWEAK: If SHOW TABLES returns no tables, then schedule a re-try later (presume the DB connection had been dropped)
+* TWEAK: Preceed warnings in the log file with [Warning]
+* TWEAK: Prevent a very rare PHP segfault due to https://bugs.php.net/bug.php?id=51425
+* TWEAK: Show the filename being unpacked during restore (helps with troubleshooting if there are very many zips)
+* TWEAK: Premium plugin now shows information about pending/past update/support expiries + links to renewal page
+* TWEAK: Show all defined constants in the debug dialog
+* TWEAK: Detect + deal with situations where the webserver double-gzipped the database file
+* TWEAK: Display a warning in the FTP configuration section if the hosting company disabled FTP functions
 
 = 1.8.5 - 2014/01/09 =
 
@@ -719,4 +736,4 @@ We recognise and thank the following for code and/or libraries used and/or modif
 Furthermore, reliance upon any non-English translation is at your own risk. UpdraftPlus can give no guarantees that translations from the original English are accurate.
 
 == Upgrade Notice ==
-* 1.8.5 : Various small tweaks and bugfixes
+* 1.8.8 : Various small tweaks

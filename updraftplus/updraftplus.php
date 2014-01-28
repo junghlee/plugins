@@ -4,7 +4,7 @@ Plugin Name: UpdraftPlus - Backup/Restore
 Plugin URI: http://updraftplus.com
 Description: Backup and restore: take backups locally, or backup to Amazon S3, Dropbox, Google Drive, Rackspace, (S)FTP, WebDAV & email, on automatic schedules.
 Author: UpdraftPlus.Com, DavidAnderson
-Version: 1.8.5
+Version: 1.8.8
 Donate link: http://david.dw-perspective.org.uk/donate
 License: GPLv3 or later
 Text Domain: updraftplus
@@ -18,12 +18,17 @@ TODO - some of these are out of date/done, needs pruning
 // Schedule a task to report on failure
 // When doing AJAX pre-restore check capture all PHP notices and dump them in our 'warning' array (don't let them go to browser directly and break the JSON)
 // When using FTP, verify that the FTP functions are not disabled (e.g. one.com disable them)
+// Renewal warning is sending them to shop... instead, send them to a 'renewals' page which gives them instructions + the coupon
+// Detect when the webserver has double-gzipped the db
 // Tweak the display so that users seeing resumption messages don't think it's stuck
 // http://www.empsebiz.com/woocommerce/
+// Store/show current Dropbox account
+// On restore, check for some 'standard' PHP modules (prevents support requests related to them) -e.g. GD, Curl
 // Get checkout page to pre-select country by IP address? (Make as free plugin?)
 // Recognise known huge non-core tables on restore, and postpone them to the end (AJAX method?)
 // Add a link on the restore page to the log file
 // Add a cart notice if people have DBSF=quantity1
+// Pre-restore actually unpack the zips if they are not insanely big (to prevent the restore crashing at this stage if there's a problem)
 // Don't set file permissions post-restore tighter than they were before
 // Pre-schedule resumptions that we know will be scheduled later
 // Make SFTP chunked (there is a new stream wrapper)
@@ -213,7 +218,7 @@ if (!defined('UPDRAFTPLUS_WARN_FILE_SIZE')) define('UPDRAFTPLUS_WARN_FILE_SIZE',
 if (!defined('UPDRAFTPLUS_WARN_DB_ROWS')) define('UPDRAFTPLUS_WARN_DB_ROWS', 150000);
 
 # The smallest value (in megabytes) that the "split zip files at" setting is allowed to be set to
-if (!defined('UPDRAFTPLUS_SPLIT_MIN')) define('UPDRAFTPLUS_SPLIT_MIN', 50);
+if (!defined('UPDRAFTPLUS_SPLIT_MIN')) define('UPDRAFTPLUS_SPLIT_MIN', 25);
 
 // Load add-ons and various files that may or may not be present, depending on where the plugin was distributed
 if (is_file(UPDRAFTPLUS_DIR.'/premium.php')) require_once(UPDRAFTPLUS_DIR.'/premium.php');
@@ -450,8 +455,13 @@ class UpdraftPlus {
 
 	public function get_table_prefix($allow_override = false) {
 		global $wpdb;
-		#if (!empty($wpdb->base_prefix)) return $wpdb->base_prefix;
-		return ($allow_override) ? apply_filters('updraftplus_get_table_prefix', $wpdb->get_blog_prefix(0)) : $wpdb->get_blog_prefix(0);
+		if (is_multisite() && !defined('MULTISITE')) {
+			# In this case (which should only be possible on installs upgraded from pre WP 3.0 WPMU), $wpdb->get_blog_prefix() cannot be made to return the right thing. $wpdb->base_prefix is not explicitly marked as public, so we prefer to use get_blog_prefix if we can, for future compatibility.
+			$prefix = $wpdb->base_prefix;
+		} else {
+			$prefix = $wpdb->get_blog_prefix(0);
+		}
+		return ($allow_override) ? apply_filters('updraftplus_get_table_prefix', $prefix) : $prefix;
 	}
 
 	public function show_admin_warning_unreadablelog() {
@@ -589,7 +599,7 @@ class UpdraftPlus {
 		if (version_compare(phpversion(), '5.2.0', '>=') && extension_loaded('zip')) {
 			$logline .= 'Y';
 		} else {
-			$logline .= (method_exists('ZipArchive', 'addFile')) ? "Y" : "N";
+			$logline .= (class_exists('ZipArchive') && method_exists('ZipArchive', 'addFile')) ? "Y" : "N";
 		}
 
 		$w3oc = 'N';
@@ -645,7 +655,7 @@ class UpdraftPlus {
 	public function log($line, $level = 'notice', $uniq_id = false) {
 
 		if ('error' == $level || 'warning' == $level) {
-			if ('error' == $level && $this->error_count() == 0) $this->log("An error condition has occurred for the first time during this job");
+			if ('error' == $level && 0 == $this->error_count()) $this->log('An error condition has occurred for the first time during this job');
 			if ($uniq_id) {
 				$this->errors[$uniq_id] = array('level' => $level, 'message' => $line);
 			} else {
@@ -667,7 +677,7 @@ class UpdraftPlus {
 		if ($this->logfile_handle) {
 			# Record log file times relative to the backup start, if possible
 			$rtime = (!empty($this->job_time_ms)) ? microtime(true)-$this->job_time_ms : microtime(true)-$this->opened_log_time;
-			fwrite($this->logfile_handle, sprintf("%08.03f", round($rtime, 3))." (".$this->current_resumption.") $line\n");
+			fwrite($this->logfile_handle, sprintf("%08.03f", round($rtime, 3))." (".$this->current_resumption.") ".(('notice' != $level) ? '['.ucfirst($level).'] ' : '').$line."\n");
 		}
 
 		switch ($this->jobdata_get('job_type')) {
@@ -1299,7 +1309,7 @@ class UpdraftPlus {
 
 			# This is just a simple test to catch restorations of old backup sets where the backup includes a resumption of the backup job
 			if ($time_now - $this->backup_time > 172800) {
-				$this->log('This backup began over a 2 days ago: aborting');
+				$this->log('This backup began over 2 days ago: aborting');
 				die;
 			}
 
@@ -1974,7 +1984,7 @@ class UpdraftPlus {
 	}
 
 	// For detecting another run, and aborting if one was found
-	function check_recent_modification($file) {
+	public function check_recent_modification($file) {
 		if (file_exists($file)) {
 			$time_mod = (int)@filemtime($file);
 			$time_now = time();
@@ -1997,19 +2007,23 @@ class UpdraftPlus {
 		return ($ret > 0);
 	}
 
-	function backup_uploads_dirlist() {
+	public function backup_uploads_dirlist($logit = false) {
 		# Create an array of directories to be skipped
 		# Make the values into the keys
-		$skip = array_flip(preg_split("/,/", UpdraftPlus_Options::get_updraft_option('updraft_include_uploads_exclude', UPDRAFT_DEFAULT_UPLOADS_EXCLUDE)));
+		$exclude = UpdraftPlus_Options::get_updraft_option('updraft_include_uploads_exclude', UPDRAFT_DEFAULT_UPLOADS_EXCLUDE);
+		if ($logit) $this->log("Exclusion option setting (uploads): ".$exclude);
+		$skip = array_flip(preg_split("/,/", $exclude));
 		$wp_upload_dir = wp_upload_dir();
 		$uploads_dir = $wp_upload_dir['basedir'];
 		return $this->compile_folder_list_for_backup($uploads_dir, array(), $skip);
 	}
 
-	function backup_others_dirlist() {
+	public function backup_others_dirlist($logit = false) {
 		# Create an array of directories to be skipped
 		# Make the values into the keys
-		$skip = array_flip(preg_split("/,/", UpdraftPlus_Options::get_updraft_option('updraft_include_others_exclude', UPDRAFT_DEFAULT_OTHERS_EXCLUDE)));
+		$exclude = UpdraftPlus_Options::get_updraft_option('updraft_include_others_exclude', UPDRAFT_DEFAULT_OTHERS_EXCLUDE);
+		if ($logit) $this->log("Exclusion option setting (others): ".$exclude);
+		$skip = array_flip(preg_split("/,/", $exclude));
 		$possible_backups_dirs = array_flip($this->get_backupable_file_entities(false));
 		return $this->compile_folder_list_for_backup(WP_CONTENT_DIR, $possible_backups_dirs, $skip);
 	}
@@ -2032,7 +2046,7 @@ class UpdraftPlus {
 	}
 
 	// avoid_these_dirs and skip_these_dirs ultimately do the same thing; but avoid_these_dirs takes full paths whereas skip_these_dirs takes basenames; and they are logged differently (dirs in avoid are potentially dangerous to include; skip is just a user-level preference). They are allowed to overlap.
-	function compile_folder_list_for_backup($backup_from_inside_dir, $avoid_these_dirs, $skip_these_dirs) {
+	public function compile_folder_list_for_backup($backup_from_inside_dir, $avoid_these_dirs, $skip_these_dirs) {
 
 		// Entries in $skip_these_dirs are allowed to end in *, which means "and anything else as a suffix". It's not a full shell glob, but it covers what is needed to-date.
 
@@ -2119,7 +2133,7 @@ class UpdraftPlus {
 		return (isset($backup_history[$timestamp])) ? $backup_history[$timestamp] : array();
 	}
 
-	function terminate_due_to_activity($file, $time_now, $time_mod) {
+	public function terminate_due_to_activity($file, $time_now, $time_mod) {
 		# We check-in, to avoid 'no check in last time!' detectors firing
 		$this->record_still_alive();
 		$file_size = file_exists($file) ? round(filesize($file)/1024,1). 'Kb' : 'n/a';
@@ -2321,6 +2335,11 @@ class UpdraftPlus {
 	public function retain_range($input) {
 		$input = (int)$input;
 		return  ($input > 0 && $input < 3650) ? $input : 1;
+	}
+
+	public function replace_http_with_webdav($input) {
+		if (!empty($input['url']) && 'http' == substr($input['url'], 0, 4)) $input['url'] = 'webdav'.substr($input['url'], 4);
+		return $input;
 	}
 
 	public function just_one_email($input, $required = false) {

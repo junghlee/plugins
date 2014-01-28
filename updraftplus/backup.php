@@ -520,7 +520,7 @@ class UpdraftPlus_Backup {
 					if (!$whandle = gzopen($attach.'.gz', 'w')) {
 						$updraftplus->log("Error: Failed to open log file for reading: ".$attach.".gz");
 					} else {
-						while (false !== ($line = @stream_get_line($handle, 2048, "\n"))) {
+						while (false !== ($line = @stream_get_line($handle, 131072, "\n"))) {
 							@gzwrite($whandle, $line."\n");
 						}
 						fclose($handle);
@@ -696,13 +696,9 @@ class UpdraftPlus_Backup {
 						*/
 
 						if ('others' == $youwhat) {
-							$dirlist = $updraftplus->backup_others_dirlist();
+							$dirlist = $updraftplus->backup_others_dirlist(true);
 						} elseif ('uploads' == $youwhat) {
-							$dirlist = $updraftplus->backup_uploads_dirlist();
-							#create_zip($create_from_dir, $whichone, $backup_file_basename, $index) {
-							foreach ($dirlist as $dir) {
-							
-							}
+							$dirlist = $updraftplus->backup_uploads_dirlist(true);
 						} else {
 							$dirlist = $whichdir;
 						}
@@ -920,7 +916,7 @@ class UpdraftPlus_Backup {
 
 				} else {
 					$total_tables--;
-					$updraftplus->log("Skipping table (lacks our prefix): $table");
+					$updraftplus->log("Skipping table (lacks our prefix (".$this->table_prefix.")): $table");
 				}
 				
 			}
@@ -1270,6 +1266,7 @@ class UpdraftPlus_Backup {
 		$this->stow("# Home URL: ".untrailingslashit(home_url())."\n");
 		$this->stow("# Content URL: ".untrailingslashit(content_url())."\n");
 		$this->stow("# Table prefix: ".$this->table_prefix_raw."\n");
+		$this->stow("# Filtered table prefix: ".$this->table_prefix."\n");
 		$this->stow("# Site info: multisite=".(is_multisite() ? '1' : '0')."\n");
 		$this->stow("# Site info: end\n");
 
@@ -1317,7 +1314,7 @@ class UpdraftPlus_Backup {
 
 		if(is_file($fullpath)) {
 			if (is_readable($fullpath)) {
-				$key = ($fullpath == $original_fullpath) ? basename($fullpath) : $use_path_when_storing.'/'.basename($fullpath);
+				$key = ($fullpath == $original_fullpath) ? ((2 == $startlevels) ? $use_path_when_storing : basename($fullpath)) : $use_path_when_storing.'/'.basename($fullpath);
 				$this->zipfiles_batched[$fullpath] = $key;
 				$this->makezip_recursive_batchedbytes += @filesize($fullpath);
 				#@touch($zipfile);
@@ -1471,6 +1468,8 @@ class UpdraftPlus_Backup {
 		# Reset. This counter is used only with PcLZip, to decide if it's better to do it all-in-one
 		$this->makezip_recursive_batchedbytes = 0;
 		if (!is_array($source)) $source=array($source);
+
+
 		foreach ($source as $element) {
 			#makezip_recursive_add($fullpath, $use_path_when_storing, $original_fullpath, $startlevels = 1)
 			if ('uploads' == $whichone) {
