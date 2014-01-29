@@ -173,7 +173,7 @@ class WP_Publication_Archive_Item {
 	 */
 	public function get_the_title( $before = '<div class="publication_title">', $after = '</div>' ) {
         $title = '<a href="' .  WP_Publication_Archive::get_download_link( $this->ID ) . '">';
-        $title .= $this->filename;
+        $title .= $this->post->post_title;
         $title .= '</a>';
 
 		return $before . $title . $after;
