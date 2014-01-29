@@ -120,23 +120,25 @@ class WP_Publication_Archive_Category_Widget extends WP_Widget {
 			$query_args['category__in'] = $cats;
 		} 
 
+        if (is_user_logged_in()) {
+            $query_args['post_status'] = "publish,private";
+        } else {
+            $query_args['post_status'] = 'publish';
+        }
+
 		echo '<ul>';
 
 		$publications = get_posts( $query_args );
 
 		add_filter( 'excerpt_length', array( $this, 'limit_summary_length' ) );
 		foreach( $publications as $post ) {
-            $post_status = get_post_status($post->ID);
-            //if ((is_user_logged_in() || $post_status == 'published') && post_password_required($post)) {
-            if (is_user_logged_in() || $post_status == 'publish') {
-                $publication = new WP_Publication_Archive_Item( $post );
+            $publication = new WP_Publication_Archive_Item( $post );
 
-                echo '<li>';
-                $publication->the_title();
-                echo '<p>' . $publication->summary . '</p>';
+            echo '<li>';
+            $publication->the_title();
+            echo '<p>' . $publication->summary . '</p>';
 
-                echo '</li>';
-            }
+            echo '</li>';
 		}
 		remove_filter( 'excerpt_length', array( $this, 'limit_summary_length' ) );
 
