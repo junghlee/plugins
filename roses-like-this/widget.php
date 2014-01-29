@@ -26,15 +26,19 @@ class MostLikedPosts extends WP_Widget {
     }
     $cat_list = implode(',',$cats);
 
+
     global $wpdb;
+    $post_status = "AND $wpdb->posts.post_status = 'publish'";
+    if (is_user_logged_in()) {
+        $post_status = "AND ($wpdb->posts.post_status = 'publish' OR $wpdb->posts.post_status = 'private')";
+    }
     $querystr = "
     SELECT $wpdb->posts.*
     FROM $wpdb->posts, $wpdb->postmeta, $wpdb->term_relationships, $wpdb->term_taxonomy
     WHERE $wpdb->posts.ID = $wpdb->postmeta.post_id
     AND $wpdb->posts.ID = $wpdb->term_relationships.object_id
     AND $wpdb->term_taxonomy.term_taxonomy_id = $wpdb->term_relationships.term_taxonomy_id
-    AND $wpdb->postmeta.meta_key = '_likes'
-    AND $wpdb->posts.post_status = 'publish'
+    AND $wpdb->postmeta.meta_key = '_likes'" . $post_status . "
     AND $wpdb->posts.post_password = ''
     AND $wpdb->posts.post_type = 'post'
     AND $wpdb->term_taxonomy.term_id IN ($cat_list)
